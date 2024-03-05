@@ -1,5 +1,8 @@
 import java.util.Scanner;
-import java.util.ArrayList; // Import the ArrayList class
+import java.util.ArrayList;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 
 class Task {
     protected String description;
@@ -61,10 +64,20 @@ class DukeException extends Exception {
 }
 
 public class Duke {
+    private static final String DATA_FILE_PATH = "./data/duke.txt";
+
     public static void main(String[] args) {
         String chatBotName = "Rose";
         Scanner scanner = new Scanner(System.in);
-        ArrayList<Task> tasks = new ArrayList<>(); // Use an ArrayList instead of an array
+        ArrayList<Task> tasks = new ArrayList<>();
+
+        // Ensure data directory exists
+        File directory = new File("./data");
+        if (!directory.exists()) {
+            directory.mkdir(); // Create the directory if it does not exist
+        }
+
+        loadTasksFromFile(tasks);
 
         printLine();
         System.out.println("Hello! I'm " + chatBotName);
@@ -84,14 +97,19 @@ public class Duke {
                     printTaskList(tasks);
                 } else if (userInput.toLowerCase().startsWith("todo")) {
                     addTask(userInput, tasks, "todo");
+                    saveTasksToFile(tasks);
                 } else if (userInput.toLowerCase().startsWith("deadline")) {
                     addTask(userInput, tasks, "deadline");
+                    saveTasksToFile(tasks);
                 } else if (userInput.toLowerCase().startsWith("event")) {
                     addTask(userInput, tasks, "event");
+                    saveTasksToFile(tasks);
                 } else if (userInput.toLowerCase().startsWith("mark")) {
                     markTask(userInput, tasks, true);
+                    saveTasksToFile(tasks);
                 } else if (userInput.toLowerCase().startsWith("unmark")) {
                     markTask(userInput, tasks, false);
+                    saveTasksToFile(tasks);
                 } else {
                     throw new DukeException("I'm sorry, but I don't know what that means :-(");
                 }
@@ -174,6 +192,59 @@ public class Duke {
         System.out.println("  " + tasks.get(tasks.size() - 1));
         System.out.println("Now you have " + tasks.size() + " tasks in the list.");
         printLine();
+    }
+
+    private static void saveTasksToFile(ArrayList<Task> tasks) {
+        try (PrintWriter writer = new PrintWriter(DATA_FILE_PATH)) {
+            for (Task task : tasks) {
+                writer.println(taskToFileString(task));
+            }
+        } catch (FileNotFoundException e) {
+            System.out.println("File not found: " + DATA_FILE_PATH);
+        }
+    }
+
+    private static void loadTasksFromFile(ArrayList<Task> tasks) {
+        File file = new File(DATA_FILE_PATH);
+        try (Scanner fileScanner = new Scanner(file)) {
+            while (fileScanner.hasNext()) {
+                String taskData = fileScanner.nextLine();
+                String[] taskDetails = taskData.split(" \\| ");
+                Task task = null;
+                switch (taskDetails[0]) {
+                    case "T":
+                        task = new Task(taskDetails[2]);
+                        break;
+                    case "D":
+                        task = new Deadline(taskDetails[2], taskDetails[3]);
+                        break;
+                    case "E":
+                        task = new Event(taskDetails[2], taskDetails[3], taskDetails[4]);
+                        break;
+                }
+                if (task != null) {
+                    if (taskDetails[1].equals("1")) {
+                        task.markAsDone();
+                    }
+                    tasks.add(task);
+                }
+            }
+        } catch (FileNotFoundException e) {
+            // It's okay if the file doesn't exist, we'll start with an empty task list.
+        }
+    }
+
+    private static String taskToFileString(Task task) {
+        String type = task instanceof Deadline ? "D" : task instanceof Event ? "E" : "T";
+        String isDone = task.isDone ? "1" : "0";
+        String description = task.description;
+        String time = "";
+        if (task instanceof Deadline) {
+            time = " | " + ((Deadline) task).by;
+        } else if (task instanceof Event) {
+            time = " | " + ((Event) task).start + " | " + ((Event) task).end;
+        }
+        return type + " | " + isDone + " | " + description + time;
     }
 
     private static void printLine() {
